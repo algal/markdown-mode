@@ -953,6 +953,11 @@ can still use auto-indentation by pressing
   :group 'markdown
   :type 'boolean)
 
+(defcustom markdown-use-org-table t
+  "Load `orgtbl-mode' minor mode for table editing.
+This enables some customizations which reformat `org-mode' tables
+as Markdown tables.")
+
 (defcustom markdown-enable-wiki-links nil
   "Syntax highlighting for wiki links.
 Set this to a non-nil value to turn on wiki link support by default.
@@ -4699,6 +4704,9 @@ Assumes match data is available for `markdown-regex-italic'."
     (define-key map (kbd "M-}") 'markdown-forward-paragraph)
     (define-key map (kbd "M-n") 'markdown-next-link)
     (define-key map (kbd "M-p") 'markdown-previous-link)
+    ;; Tables
+    (define-key map (kbd "C-c |") 'markdown-table-create-or-convert-from-region)
+    (define-key map (kbd "C-c C-c C-c") 'markdown-table-ctrl-c-ctrl-c)
     ;; Alternative keys (in case of problems with the arrow keys)
     (define-key map (kbd "C-c C-x u") 'markdown-move-up)
     (define-key map (kbd "C-c C-x d") 'markdown-move-down)
@@ -6486,6 +6494,32 @@ markers and footnote text."
          (error "Nothing to jump to from context at point"))))
 
 
+;;; Tables ====================================================================
+
+(defun markdown-table-fixup ()
+  "Replace \"-+-\" with \"-|-\" after `org-table-align'."
+  (when (and (memq major-mode '(markdown-mode gfm-mode))
+             markdown-use-org-table)
+    (save-excursion
+      (save-restriction
+        (narrow-to-region (org-table-begin) (org-table-end))
+        (goto-char (point-min))
+        (while (search-forward "-+-" nil t)
+          (replace-match "-|-"))))))
+
+(defun markdown-table-create-or-convert-from-region (arg)
+  "Wrap `orgtbl-create-or-convert-from-region' to adjust tables."
+  (interactive "P")
+  (orgtbl-create-or-convert-from-region arg)
+  (markdown-table-fixup))
+
+(defun markdown-table-ctrl-c-ctrl-c (arg)
+  "Wrap `orgtbl-ctrl-c-ctrl-c' to fix tables after realignment."
+  (interactive "P")
+  (orgtbl-ctrl-c-ctrl-c arg)
+  (markdown-table-fixup))
+
+
 ;;; Miscellaneous =============================================================
 
 (defun markdown-compress-whitespace-string (str)
@@ -6912,6 +6946,13 @@ or \\[markdown-toggle-inline-images]."
     (make-local-hook 'after-change-functions)
     (make-local-hook 'font-lock-extend-region-functions)
     (make-local-hook 'window-configuration-change-hook))
+
+  ;; Tables
+  (when markdown-use-org-table
+    (require 'org-table)
+    (orgtbl-mode)
+    (define-key orgtbl-mode-map (kbd "C-c |") 'markdown-table-create-or-convert-from-region)
+    (define-key orgtbl-mode-map (kbd "C-c C-c") 'markdown-table-ctrl-c-ctrl-c))
 
   ;; Make checkboxes buttons
   (when markdown-make-gfm-checkboxes-buttons
